@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Simple Collaborative Canvas</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Collaborative Drawing Canvas</h1>
+        <div class="info">
+            <span id="status">Connecting...</span>
+            <button id="clear">Clear Canvas</button>
+        </div>
+        <canvas id="canvas" width="800" height="600"></canvas>
+    </div>
+
+    <script>
+        console.log('🚀 JavaScript loaded!');
+        
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const status = document.getElementById('status');
+        const clearBtn = document.getElementById('clear');
+        
+        let isDrawing = false;
+        let userColor = '#' + Math.floor(Math.random()*16777215).toString(16);
+        
+        // WebSocket connection
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${protocol}//${window.location.host}`;
+        console.log('Attempting WebSocket connection to:', wsUrl);
+        
+        const ws = new WebSocket(wsUrl);
+        
+        ws.onopen = () => {
+            console.log('✅ WebSocket connected successfully');
+            status.textContent = 'Connected';
+            status.style.color = 'green';
+        };
+        
+        ws.onclose = (event) => {
+            console.log('❌ WebSocket disconnected. Code:', event.code, 'Reason:', event.reason);
+            status.textContent = 'Disconnected';
+            status.style.color = 'red';
+        };
+        
+        ws.onerror = (error) => {
+            console.log('🚨 WebSocket error:', error);
+            status.textContent = 'Connection Error';
+            status.style.color = 'red';
+        };
+        
+        ws.onmessage = (event) => {
+            console.log('📨 Raw received data:', event.data);
+            try {
+                const data = JSON.parse(event.data);
+                console.log('📨 Parsed drawing data:', data);
+                drawLine(data.x1, data.y1, data.x2, data.y2, data.color);
+            } catch (error) {
+                console.error('❌ JSON parse error:', error);
+                console.error('❌ Raw data that failed:', event.data);
+            }
+        };
+        
+        // Drawing functions
+        function drawLine(x1, y1, x2, y2, color) {
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 2;
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            ctx.moveTo(x1, y1);
+            ctx.lineTo(x2, y2);
+            ctx.stroke();
+        }
+        
+        let lastX = 0;
+        let lastY = 0;
+        
+        // Mouse events
+        canvas.addEventListener('mousedown', (e) => {
+            isDrawing = true;
+            const rect = canvas.getBoundingClientRect();
+            lastX = e.clientX - rect.left;
+            lastY = e.clientY - rect.top;
+        });
+        
+        canvas.addEventListener('mousemove', (e) => {
+            if (!isDrawing) return;
+            
+            const rect = canvas.getBoundingClientRect();
+            const currentX = e.clientX - rect.left;
+            const currentY = e.clientY - rect.top;
+            
+            // Draw locally
+            drawLine(lastX, lastY, currentX, currentY, userColor);
+            
+            // Send to server
+            if (ws.readyState === WebSocket.OPEN) {
+                const drawData = {
+                    x1: lastX,
+                    y1: lastY,
+                    x2: currentX,
+                    y2: currentY,
+                    color: userColor
+                };
+                console.log('📤 Sending drawing data:', drawData);
+                ws.send(JSON.stringify(drawData));
+            }
+            
+            lastX = currentX;
+            lastY = currentY;
+        });
+        
+        canvas.addEventListener('mouseup', () => {
+            isDrawing = false;
+        });
+        
+        // Clear canvas
+        clearBtn.addEventListener('click', () => {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        });
+    </script>
+</body>
+</html>
