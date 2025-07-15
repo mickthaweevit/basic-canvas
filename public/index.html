@@ -2,6 +2,7 @@
 <html>
 <head>
     <title>Simple Collaborative Canvas</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -112,6 +113,49 @@
         });
         
         canvas.addEventListener('mouseup', () => {
+            isDrawing = false;
+        });
+        
+        // Touch events for mobile
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            isDrawing = true;
+            const rect = canvas.getBoundingClientRect();
+            const touch = e.touches[0];
+            lastX = touch.clientX - rect.left;
+            lastY = touch.clientY - rect.top;
+        });
+        
+        canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            if (!isDrawing) return;
+            
+            const rect = canvas.getBoundingClientRect();
+            const touch = e.touches[0];
+            const currentX = touch.clientX - rect.left;
+            const currentY = touch.clientY - rect.top;
+            
+            // Draw locally
+            drawLine(lastX, lastY, currentX, currentY, userColor);
+            
+            // Send to server
+            if (ws.readyState === WebSocket.OPEN) {
+                const drawData = {
+                    x1: lastX,
+                    y1: lastY,
+                    x2: currentX,
+                    y2: currentY,
+                    color: userColor
+                };
+                ws.send(JSON.stringify(drawData));
+            }
+            
+            lastX = currentX;
+            lastY = currentY;
+        });
+        
+        canvas.addEventListener('touchend', (e) => {
+            e.preventDefault();
             isDrawing = false;
         });
         
